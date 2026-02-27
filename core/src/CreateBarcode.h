@@ -72,6 +72,9 @@ public:
 	/// GS1 mode (most 2D symbologies + Code128)
 	ZX_RO_PROPERTY(bool, gs1);
 
+	// Code128: process special extra escapes (\^A, \^B, \^C, \^@, \^1)
+	ZX_RO_PROPERTY(bool, extraEsc);
+
 	/// Set the "reader init" flag (most 2D symbologies)
 	ZX_RO_PROPERTY(bool, readerInit);
 
