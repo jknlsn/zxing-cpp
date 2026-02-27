@@ -46,6 +46,9 @@ namespace BarcodeExtra {
 	ZX_EXTRA(UEC);      ///< Unused error correction margin in the range [0, 1]
 	ZX_EXTRA(UPCE);     ///< The original (non-normalized) UPC-E code if UPC-E is detected
 	ZX_EXTRA(ReaderInit);
+	ZX_EXTRA(Code128RawCodes);
+	ZX_EXTRA(Code128StartSet);
+	ZX_EXTRA(Code128ChecksumValid);
 	#undef ZX_EXTRA
 } // namespace BarcodeExtra
 
