@@ -14,7 +14,7 @@ using namespace ZXing;
 using namespace ZXing::OneD;
 
 // Helper to call decodePattern()
-static Barcode parse(const int startPattern, PatternRow row)
+static Barcode parse(const int startPattern, PatternRow row, bool returnCode128Details = false)
 {
 	if (startPattern == 'A') {
 		row.insert(row.begin(), { 0, 2, 1, 1, 4, 1, 2 });
@@ -27,6 +27,7 @@ static Barcode parse(const int startPattern, PatternRow row)
 
 	std::unique_ptr<Code128Reader::DecodingState> state;
 	ReaderOptions opts;
+	opts.returnCode128Details(returnCode128Details);
 	Code128Reader reader(opts);
 	PatternView next(row);
 	return reader.decodePattern(0, next, state);
@@ -118,4 +119,18 @@ TEST(ODCode128ReaderTest, ISO8859_1)
 		auto result = parse('B', row);
 		EXPECT_EQ(result.text(), "a\u00E9\u00A0");
 	}
+}
+
+TEST(ODCode128ReaderTest, ExtraCode128Details)
+{
+	// Plain "2001"
+	PatternRow row({ 2, 2, 1, 2, 3, 1, 2, 2, 2, 1, 2, 2, 3, 1, 1, 2, 2, 2 });
+	auto result = parse('C', row, true);
+	auto extra = result.extra();
+
+	EXPECT_NE(extra.find("\"Code128StartSet\":\"C\""), std::string::npos);
+	EXPECT_NE(extra.find("\"Code128ChecksumValid\":true"), std::string::npos);
+	EXPECT_NE(extra.find("\"Code128RawCodes\":"), std::string::npos);
+	EXPECT_NE(extra.find("105"), std::string::npos);
+	EXPECT_NE(extra.find("106"), std::string::npos);
 }

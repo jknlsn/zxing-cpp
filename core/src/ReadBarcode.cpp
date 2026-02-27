@@ -41,6 +41,7 @@ struct ReaderOptions::Data
 	bool isPure                   : 1 = false;
 	bool validateOptionalChecksum : 1 = false;
 	bool returnErrors             : 1 = false;
+	bool returnCode128Details     : 1 = false;
 	uint8_t downscaleFactor       : 3 = 3; // values 2, 3, 4
 	EanAddOnSymbol eanAddOnSymbol : 2 = EanAddOnSymbol::Ignore;
 	Binarizer binarizer           : 2 = Binarizer::LocalAverage;
@@ -93,6 +94,7 @@ ZX_PROPERTY(uint8_t, minLineCount, setMinLineCount)
 ZX_PROPERTY(uint8_t, maxNumberOfSymbols, setMaxNumberOfSymbols)
 ZX_PROPERTY(bool, validateOptionalChecksum, setValidateOptionalChecksum)
 ZX_PROPERTY(bool, returnErrors, setReturnErrors)
+ZX_PROPERTY(bool, returnCode128Details, setReturnCode128Details)
 ZX_PROPERTY(EanAddOnSymbol, eanAddOnSymbol, setEanAddOnSymbol)
 ZX_PROPERTY(TextMode, textMode, setTextMode)
 ZX_PROPERTY(CharacterSet, characterSet, setCharacterSet)

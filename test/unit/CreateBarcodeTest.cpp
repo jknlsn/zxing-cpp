@@ -365,6 +365,11 @@ TEST(CreateBarcodeTest, CreatorOptions)
 	EXPECT_EQ(bc.symbol().height(), bc.symbol().width());
 #endif // ZXING_ENABLE_DATAMATRIX
 
+#if ZXING_ENABLE_1D
+	bc = CreateBarcodeFromText("\\^AACME1234567890", {Code128, "extraEsc"});
+	EXPECT_EQ(bc.text(TextMode::Plain), "ACME1234567890");
+#endif // ZXING_ENABLE_1D
+
 #if ZXING_ENABLE_QRCODE
 	bc = CreateBarcodeFromText("12345", {QRCode, "version=5"});
 	EXPECT_EQ(bc.symbol().height(), 37);

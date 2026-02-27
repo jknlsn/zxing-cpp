@@ -241,6 +241,7 @@ void ZXing_ReaderOptions_setTryDownscale(ZXing_ReaderOptions* opts, bool tryDown
 void ZXing_ReaderOptions_setIsPure(ZXing_ReaderOptions* opts, bool isPure);
 void ZXing_ReaderOptions_setValidateOptionalChecksum(ZXing_ReaderOptions* opts, bool validateOptionalChecksum);
 void ZXing_ReaderOptions_setReturnErrors(ZXing_ReaderOptions* opts, bool returnErrors);
+void ZXing_ReaderOptions_setReturnCode128Details(ZXing_ReaderOptions* opts, bool returnCode128Details);
 void ZXing_ReaderOptions_setFormats(ZXing_ReaderOptions* opts, const ZXing_BarcodeFormat* formats, int count);
 void ZXing_ReaderOptions_setBinarizer(ZXing_ReaderOptions* opts, ZXing_Binarizer binarizer);
 void ZXing_ReaderOptions_setEanAddOnSymbol(ZXing_ReaderOptions* opts, ZXing_EanAddOnSymbol eanAddOnSymbol);
@@ -259,6 +260,7 @@ bool ZXing_ReaderOptions_getTryDownscale(const ZXing_ReaderOptions* opts);
 bool ZXing_ReaderOptions_getIsPure(const ZXing_ReaderOptions* opts);
 bool ZXing_ReaderOptions_getValidateOptionalChecksum(const ZXing_ReaderOptions* opts);
 bool ZXing_ReaderOptions_getReturnErrors(const ZXing_ReaderOptions* opts);
+bool ZXing_ReaderOptions_getReturnCode128Details(const ZXing_ReaderOptions* opts);
 ZXing_BarcodeFormat* ZXing_ReaderOptions_getFormats(const ZXing_ReaderOptions* opts, int* outCount);
 ZXing_Binarizer ZXing_ReaderOptions_getBinarizer(const ZXing_ReaderOptions* opts);
 ZXing_EanAddOnSymbol ZXing_ReaderOptions_getEanAddOnSymbol(const ZXing_ReaderOptions* opts);

@@ -35,8 +35,46 @@ static const int CODE_FNC_2 = 97;
 static const int CODE_FNC_3 = 96;
 
 static const int CODE_START_A = 103;
+static const int CODE_START_B = 104;
 static const int CODE_START_C = 105;
 static const int CODE_STOP = 106;
+
+static char CodeSetLetter(int code)
+{
+	switch (code) {
+	case CODE_CODE_A:
+	case CODE_START_A:
+		return 'A';
+	case CODE_CODE_B:
+	case CODE_START_B:
+		return 'B';
+	case CODE_CODE_C:
+	case CODE_START_C:
+		return 'C';
+	default:
+		return '?';
+	}
+}
+
+static std::string CodesToCSV(const ByteArray& codes, bool appendStop)
+{
+	std::string res;
+	res.reserve(codes.size() * 4 + 8);
+
+	for (int i = 0; i < Size(codes); ++i) {
+		if (!res.empty())
+			res.push_back(',');
+		res += std::to_string(codes[i]);
+	}
+
+	if (appendStop) {
+		if (!res.empty())
+			res.push_back(',');
+		res += std::to_string(CODE_STOP);
+	}
+
+	return res;
+}
 
 class Raw2TxtDecoder
 {
@@ -236,13 +274,21 @@ BarcodeData Code128Reader::decodePattern(int rowNumber, PatternView& next, std::
 	int checksum = rawCodes.front();
 	for (int i = 1; i < Size(rawCodes) - 1; ++i)
 		checksum += i * rawCodes[i];
+	bool checksumValid = checksum % 103 == rawCodes.back();
 	// the last code is the checksum:
-	if (checksum % 103 != rawCodes.back())
+	if (!checksumValid)
 		error = ChecksumError();
+
+	std::string extra = JsonProp(BarcodeExtra::ReaderInit, raw2txt.readerInit());
+	if (_opts.returnCode128Details()) {
+		extra += JsonProp(BarcodeExtra::Code128RawCodes, CodesToCSV(rawCodes, true));
+		extra += JsonProp(BarcodeExtra::Code128StartSet, std::string(1, CodeSetLetter(startCode)));
+		extra += JsonProp(BarcodeExtra::Code128ChecksumValid, checksumValid);
+	}
 
 	int xStop = next.pixelsTillEnd();
 	return LinearBarcode(BarcodeFormat::Code128, raw2txt.text(), rowNumber, xStart, xStop, raw2txt.symbologyIdentifier(), error,
-				   JsonProp(BarcodeExtra::ReaderInit, raw2txt.readerInit()));
+				   std::move(extra));
 }
 
 } // namespace ZXing::OneD

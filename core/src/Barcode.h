@@ -42,6 +42,9 @@ namespace BarcodeExtra {
 	ZX_EXTRA(ECLevel);
 	ZX_EXTRA(UPCE);
 	ZX_EXTRA(ReaderInit);
+	ZX_EXTRA(Code128RawCodes);
+	ZX_EXTRA(Code128StartSet);
+	ZX_EXTRA(Code128ChecksumValid);
 	#undef ZX_EXTRA
 } // namespace BarcodeExtra
 

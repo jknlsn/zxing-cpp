@@ -141,6 +141,9 @@ public:
 	/// If true, return the barcodes with errors as well (e.g. checksum errors, see @Barcode::error())
 	ZX_PROPERTY(bool, returnErrors, setReturnErrors)
 
+	/// If true, include Code128-specific internals (raw codewords, start set, checksum status) in Barcode::extra().
+	ZX_PROPERTY(bool, returnCode128Details, setReturnCode128Details)
+
 	/// Specify whether to ignore, read or require EAN-2/5 add-on symbols while scanning EAN/UPC codes
 	ZX_PROPERTY(EanAddOnSymbol, eanAddOnSymbol, setEanAddOnSymbol)
 

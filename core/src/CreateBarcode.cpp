@@ -61,6 +61,7 @@ ZX_PROPERTY(std::string, options)
 ZX_RO_PROPERTY(std::string, ecLevel);
 ZX_RO_PROPERTY(std::string, eci);
 ZX_RO_PROPERTY(bool, gs1);
+ZX_RO_PROPERTY(bool, extraEsc);
 ZX_RO_PROPERTY(bool, readerInit);
 ZX_RO_PROPERTY(bool, forceSquare);
 ZX_RO_PROPERTY(int, columns);
@@ -311,6 +312,8 @@ Barcode CreateBarcode(const void* data, int size, int mode, const CreatorOptions
 	auto zint = opts.zint();
 
 	zint->input_mode = mode == UNICODE_MODE && opts.gs1() && (opts.format() & BarcodeFormat::AllGS1) ? GS1_MODE : mode;
+	if (opts.format() == BarcodeFormat::Code128 && opts.extraEsc())
+		zint->input_mode |= EXTRA_ESCAPE_MODE;
 	if (mode == UNICODE_MODE && static_cast<const char*>(data)[0] != '[')
 		zint->input_mode |= GS1PARENS_MODE;
 	zint->output_options |= OUT_BUFFER_INTERMEDIATE | BARCODE_NO_QUIET_ZONES | BARCODE_CONTENT_SEGS;

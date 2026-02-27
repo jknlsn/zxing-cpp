@@ -66,6 +66,7 @@ public:
 	ZX_RO_PROPERTY(std::string, ecLevel); // most 2D symbologies: ecLevel, e.g. "30%", see also libzint doc
 	ZX_RO_PROPERTY(std::string, eci);     // most 2D symbologies: specify ECI designator to use
 	ZX_RO_PROPERTY(bool, gs1);
+	ZX_RO_PROPERTY(bool, extraEsc);       // Code128: process special extra escapes (\^A, \^B, \^C, \^@, \^1)
 	ZX_RO_PROPERTY(bool, readerInit);     // most 2D symbologies: set the "reader init" flag
 	ZX_RO_PROPERTY(bool, forceSquare);    // DataMatrix: only consider square symbol versions
 	ZX_RO_PROPERTY(int, columns);         // specify number of columns (e.g. for DataBarExpStk, PDF417)
