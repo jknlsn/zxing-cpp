@@ -98,12 +98,40 @@ void ZXing_ImageView_delete(ZXing_ImageView* iv)
 
 void ZXing_ImageView_crop(ZXing_ImageView* iv, int left, int top, int width, int height)
 {
-	*iv = iv->cropped(left, top, width, height);
+	// Defensive null check for direct C callers.
+	if (!iv) {
+		lastErrorMsg = "ImageView param is NULL";
+		return;
+	}
+	try {
+		*iv = iv->cropped(left, top, width, height);
+	}
+	ZX_CATCH()
 }
 
 void ZXing_ImageView_rotate(ZXing_ImageView* iv, int degree)
 {
-	*iv = iv->rotated(degree);
+	// Defensive null check for direct C callers.
+	if (!iv) {
+		lastErrorMsg = "ImageView param is NULL";
+		return;
+	}
+	try {
+		*iv = iv->rotated(degree);
+	}
+	ZX_CATCH()
+}
+
+ZXing_ImageView* ZXing_ImageView_cropped(const ZXing_ImageView* iv, int left, int top, int width, int height)
+{
+	ZX_CHECK(iv, "ImageView param is NULL")
+	ZX_TRY(new ImageView(iv->cropped(left, top, width, height)))
+}
+
+ZXing_ImageView* ZXing_ImageView_rotated(const ZXing_ImageView* iv, int degree)
+{
+	ZX_CHECK(iv, "ImageView param is NULL")
+	ZX_TRY(new ImageView(iv->rotated(degree)))
 }
 
 void ZXing_Image_delete(ZXing_Image* img)
@@ -317,6 +345,16 @@ ZX_PROPERTY(int, maxNumberOfSymbols, MaxNumberOfSymbols)
 
 #undef ZX_PROPERTY
 
+ZXing_CharacterSet ZXing_ReaderOptions_getCharacterSet(const ZXing_ReaderOptions* opts)
+{
+	return static_cast<ZXing_CharacterSet>(opts->characterSet());
+}
+
+void ZXing_ReaderOptions_setCharacterSet(ZXing_ReaderOptions* opts, ZXing_CharacterSet characterSet)
+{
+	opts->characterSet(static_cast<CharacterSet>(characterSet));
+}
+
 void ZXing_ReaderOptions_setFormats(ZXing_ReaderOptions* opts, const ZXing_BarcodeFormat* formats, int count)
 {
 	if (!formats || !count)
@@ -426,12 +464,14 @@ ZX_PROPERTY(bool, addQuietZones, AddQuietZones)
 ZXing_Barcode* ZXing_CreateBarcodeFromText(const char* data, int size, const ZXing_CreatorOptions* opts)
 {
 	ZX_CHECK(data && opts, "Data and/or options param in CreateBarcodeFromText is NULL")
+	ZX_CHECK(size >= 0, "Size param in CreateBarcodeFromText is negative")
 	ZX_TRY(new Barcode(CreateBarcodeFromText({data, size ? static_cast<size_t>(size) : strlen(data)}, *opts));)
 }
 
 ZXing_Barcode* ZXing_CreateBarcodeFromBytes(const void* data, int size, const ZXing_CreatorOptions* opts)
 {
-	ZX_CHECK(data && size && opts, "Data and/or options param in CreateBarcodeFromBytes is NULL")
+	ZX_CHECK(data && opts, "Data and/or options param in CreateBarcodeFromBytes is NULL")
+	ZX_CHECK(size > 0, "Size param in CreateBarcodeFromBytes must be positive")
 	ZX_TRY(new Barcode(CreateBarcodeFromBytes(data, size, *opts)))
 }
 
@@ -443,7 +483,7 @@ char* ZXing_WriteBarcodeToSVG(const ZXing_Barcode* barcode, const ZXing_WriterOp
 
 ZXing_Image* ZXing_WriteBarcodeToImage(const ZXing_Barcode* barcode, const ZXing_WriterOptions* opts)
 {
-	ZX_CHECK(barcode, "Barcode param in WriteBarcodeToSVG is NULL")
+	ZX_CHECK(barcode, "Barcode param in WriteBarcodeToImage is NULL")
 	ZX_TRY(new Image(opts ? WriteBarcodeToImage(*barcode, *opts) : WriteBarcodeToImage(*barcode)))
 }
 

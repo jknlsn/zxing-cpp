@@ -49,7 +49,10 @@ private func grayscaleData(from image: CGImage) throws -> Data {
 }
 
 extension ImageView {
-	/// Creates an ImageView from a CGImage. The CGImage pixel data is retained (not copied).
+	/// Creates an `ImageView` from a `CGImage`.
+	///
+	/// Retains the source pixel data when the `CGImage` format can be bridged directly.
+	/// Unsupported formats fall back to a copied grayscale conversion.
 	public convenience init(cgImage: CGImage) throws {
 		guard let dataProvider = cgImage.dataProvider, let cfData = dataProvider.data else {
 			throw ZXingError("Could not get pixel data from CGImage")
@@ -97,17 +100,57 @@ extension ImageView {
 }
 
 extension Image {
-	/// Converts the image to a CGImage (grayscale).
+	/// Converts the image to a `CGImage` when the pixel format is supported by CoreGraphics.
 	public var cgImage: CGImage? {
 		guard width > 0, height > 0 else { return nil }
+
+		let colorSpace: CGColorSpace
+		let bitsPerPixel: Int
+		let bytesPerRow: Int
+		let bitmapInfo: CGBitmapInfo
+
+		switch format {
+		case .lum:
+			colorSpace = CGColorSpaceCreateDeviceGray()
+			bitsPerPixel = 8
+			bytesPerRow = width
+			bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.none.rawValue)
+		case .rgb:
+			colorSpace = CGColorSpaceCreateDeviceRGB()
+			bitsPerPixel = 24
+			bytesPerRow = width * format.bytesPerPixel
+			bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.none.rawValue)
+		case .rgba:
+			colorSpace = CGColorSpaceCreateDeviceRGB()
+			bitsPerPixel = 32
+			bytesPerRow = width * format.bytesPerPixel
+			bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.last.rawValue).union(.byteOrder32Big)
+		case .argb:
+			colorSpace = CGColorSpaceCreateDeviceRGB()
+			bitsPerPixel = 32
+			bytesPerRow = width * format.bytesPerPixel
+			bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.first.rawValue).union(.byteOrder32Big)
+		case .bgra:
+			colorSpace = CGColorSpaceCreateDeviceRGB()
+			bitsPerPixel = 32
+			bytesPerRow = width * format.bytesPerPixel
+			bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.first.rawValue).union(.byteOrder32Little)
+		case .abgr:
+			colorSpace = CGColorSpaceCreateDeviceRGB()
+			bitsPerPixel = 32
+			bytesPerRow = width * format.bytesPerPixel
+			bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.last.rawValue).union(.byteOrder32Little)
+		case .none, .lumA, .bgr:
+			return nil
+		}
 
 		guard let provider = CGDataProvider(data: data as CFData) else { return nil }
 
 		return CGImage(
 			width: width, height: height,
-			bitsPerComponent: 8, bitsPerPixel: 8, bytesPerRow: width,
-			space: CGColorSpaceCreateDeviceGray(),
-			bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.none.rawValue),
+			bitsPerComponent: 8, bitsPerPixel: bitsPerPixel, bytesPerRow: bytesPerRow,
+			space: colorSpace,
+			bitmapInfo: bitmapInfo,
 			provider: provider,
 			decode: nil, shouldInterpolate: false,
 			intent: .defaultIntent
@@ -117,7 +160,7 @@ extension Image {
 
 extension Barcode {
 	/// Renders the barcode as a CGImage.
-	public func toCGImage(_ options: WriterOptions? = nil) throws -> CGImage {
+	public func toCGImage(_ options: WriterOptions = .init()) throws -> CGImage {
 		let image = try toImage(options)
 		guard let cg = image.cgImage else {
 			throw ZXingError("Failed to create CGImage from barcode image")
@@ -191,9 +234,33 @@ extension BarcodeReader {
 #if canImport(UIKit)
 import UIKit
 
+private func normalizedCGImage(from image: UIImage) throws -> CGImage {
+	if image.imageOrientation == .up, let cgImage = image.cgImage {
+		return cgImage
+	}
+
+	guard image.size.width > 0, image.size.height > 0 else {
+		throw ZXingError("Could not render normalized CGImage from UIImage")
+	}
+
+	let format = UIGraphicsImageRendererFormat.preferred()
+	format.scale = image.scale
+	format.opaque = false
+
+	let renderer = UIGraphicsImageRenderer(size: image.size, format: format)
+	let normalized = renderer.image { _ in
+		image.draw(in: CGRect(origin: .zero, size: image.size))
+	}
+
+	guard let cgImage = normalized.cgImage else {
+		throw ZXingError("Could not render normalized CGImage from UIImage")
+	}
+	return cgImage
+}
+
 extension Barcode {
 	/// Renders the barcode as a UIImage.
-	public func toUIImage(_ options: WriterOptions? = nil) throws -> UIImage {
+	public func toUIImage(_ options: WriterOptions = .init()) throws -> UIImage {
 		let cgImage = try toCGImage(options)
 		return UIImage(cgImage: cgImage)
 	}
@@ -202,10 +269,7 @@ extension Barcode {
 extension BarcodeReader {
 	/// Reads barcodes directly from a UIImage.
 	public func read(from image: UIImage) throws -> [Barcode] {
-		guard let cgImage = image.cgImage else {
-			throw ZXingError("Could not get CGImage from UIImage")
-		}
-		return try read(from: cgImage)
+		return try read(from: normalizedCGImage(from: image))
 	}
 }
 #endif
@@ -217,7 +281,7 @@ import AppKit
 
 extension Barcode {
 	/// Renders the barcode as an NSImage.
-	public func toNSImage(_ options: WriterOptions? = nil) throws -> NSImage {
+	public func toNSImage(_ options: WriterOptions = .init()) throws -> NSImage {
 		let cgImage = try toCGImage(options)
 		return NSImage(cgImage: cgImage, size: NSSize(width: cgImage.width, height: cgImage.height))
 	}

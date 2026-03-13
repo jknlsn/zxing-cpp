@@ -60,8 +60,14 @@ ZXing_ImageView* ZXing_ImageView_new_checked(const uint8_t* data, int size, int 
 											 int rowStride, int pixStride);
 void ZXing_ImageView_delete(ZXing_ImageView* iv);
 
+// Legacy in-place transforms that mutate `iv`.
 void ZXing_ImageView_crop(ZXing_ImageView* iv, int left, int top, int width, int height);
 void ZXing_ImageView_rotate(ZXing_ImageView* iv, int degree);
+
+// Non-mutating transforms that return a newly allocated view.
+// The returned view shares the same underlying pixel buffer.
+ZXing_ImageView* ZXing_ImageView_cropped(const ZXing_ImageView* iv, int left, int top, int width, int height);
+ZXing_ImageView* ZXing_ImageView_rotated(const ZXing_ImageView* iv, int degree);
 
 void ZXing_Image_delete(ZXing_Image* img);
 
@@ -184,6 +190,44 @@ typedef enum
 	ZXing_TextMode_HexECI,
 } ZXing_TextMode;
 
+typedef enum
+{
+	ZXing_CharacterSet_Unknown,
+	ZXing_CharacterSet_ASCII,
+	ZXing_CharacterSet_ISO8859_1,
+	ZXing_CharacterSet_ISO8859_2,
+	ZXing_CharacterSet_ISO8859_3,
+	ZXing_CharacterSet_ISO8859_4,
+	ZXing_CharacterSet_ISO8859_5,
+	ZXing_CharacterSet_ISO8859_6,
+	ZXing_CharacterSet_ISO8859_7,
+	ZXing_CharacterSet_ISO8859_8,
+	ZXing_CharacterSet_ISO8859_9,
+	ZXing_CharacterSet_ISO8859_10,
+	ZXing_CharacterSet_ISO8859_11,
+	ZXing_CharacterSet_ISO8859_13,
+	ZXing_CharacterSet_ISO8859_14,
+	ZXing_CharacterSet_ISO8859_15,
+	ZXing_CharacterSet_ISO8859_16,
+	ZXing_CharacterSet_Cp437,
+	ZXing_CharacterSet_Cp1250,
+	ZXing_CharacterSet_Cp1251,
+	ZXing_CharacterSet_Cp1252,
+	ZXing_CharacterSet_Cp1256,
+	ZXing_CharacterSet_Shift_JIS,
+	ZXing_CharacterSet_Big5,
+	ZXing_CharacterSet_GB2312,
+	ZXing_CharacterSet_GB18030,
+	ZXing_CharacterSet_EUC_JP,
+	ZXing_CharacterSet_EUC_KR,
+	ZXing_CharacterSet_UTF16BE,
+	ZXing_CharacterSet_UTF8,
+	ZXing_CharacterSet_UTF16LE,
+	ZXing_CharacterSet_UTF32BE,
+	ZXing_CharacterSet_UTF32LE,
+	ZXing_CharacterSet_BINARY,
+} ZXing_CharacterSet;
+
 ZXing_ReaderOptions* ZXing_ReaderOptions_new();
 void ZXing_ReaderOptions_delete(ZXing_ReaderOptions* opts);
 
@@ -201,6 +245,7 @@ void ZXing_ReaderOptions_setFormats(ZXing_ReaderOptions* opts, const ZXing_Barco
 void ZXing_ReaderOptions_setBinarizer(ZXing_ReaderOptions* opts, ZXing_Binarizer binarizer);
 void ZXing_ReaderOptions_setEanAddOnSymbol(ZXing_ReaderOptions* opts, ZXing_EanAddOnSymbol eanAddOnSymbol);
 void ZXing_ReaderOptions_setTextMode(ZXing_ReaderOptions* opts, ZXing_TextMode textMode);
+void ZXing_ReaderOptions_setCharacterSet(ZXing_ReaderOptions* opts, ZXing_CharacterSet characterSet);
 void ZXing_ReaderOptions_setMinLineCount(ZXing_ReaderOptions* opts, int n);
 void ZXing_ReaderOptions_setMaxNumberOfSymbols(ZXing_ReaderOptions* opts, int n);
 
@@ -218,6 +263,7 @@ ZXing_BarcodeFormat* ZXing_ReaderOptions_getFormats(const ZXing_ReaderOptions* o
 ZXing_Binarizer ZXing_ReaderOptions_getBinarizer(const ZXing_ReaderOptions* opts);
 ZXing_EanAddOnSymbol ZXing_ReaderOptions_getEanAddOnSymbol(const ZXing_ReaderOptions* opts);
 ZXing_TextMode ZXing_ReaderOptions_getTextMode(const ZXing_ReaderOptions* opts);
+ZXing_CharacterSet ZXing_ReaderOptions_getCharacterSet(const ZXing_ReaderOptions* opts);
 int ZXing_ReaderOptions_getMinLineCount(const ZXing_ReaderOptions* opts);
 int ZXing_ReaderOptions_getMaxNumberOfSymbols(const ZXing_ReaderOptions* opts);
 

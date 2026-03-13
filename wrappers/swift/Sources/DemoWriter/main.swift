@@ -15,7 +15,7 @@ func main() throws {
 		let name = (args.first as NSString?)?.lastPathComponent ?? "demo_writer"
 		fputs("Usage: \(name) <text> <format> <output.[svg|png]> [options]\n", stderr)
 		fputs("Example: \(name) \"Hello World\" QRCode barcode.png \"EcLevel=H\"\n", stderr)
-		fputs("Supported formats: \(BarcodeFormats.list(.allCreatable).map { $0.description }.joined(separator: ", "))\n", stderr)
+		fputs("Supported formats: \(BarcodeFormat.all(matching: .allCreatable).map { $0.description }.joined(separator: ", "))\n", stderr)
 		exit(1)
 	}
 
@@ -26,7 +26,7 @@ func main() throws {
 
 	guard let format = BarcodeFormat(string: formatStr) else {
 		fputs("Error: Unknown barcode format '\(formatStr)'\n", stderr)
-		fputs("Supported formats: \(BarcodeFormats.list(.allCreatable).map { $0.description }.joined(separator: ", "))\n", stderr)
+		fputs("Supported formats: \(BarcodeFormat.all(matching: .allCreatable).map { $0.description }.joined(separator: ", "))\n", stderr)
 		exit(1)
 	}
 
@@ -35,7 +35,7 @@ func main() throws {
 	let barcode = try Barcode(text, format: format, options: options)
 
 	if filename.hasSuffix(".svg") {
-		let svg = try barcode.toSVG(WriterOptions(scale: 5, addHRT: true))
+		let svg = try barcode.toSVG(WriterOptions(scale: 5, humanReadableText: true))
 		try svg.write(toFile: filename, atomically: true, encoding: .utf8)
 	} else {
 #if canImport(CoreGraphics)

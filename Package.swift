@@ -51,6 +51,11 @@ targets += [
         dependencies: ["ZXingCpp"],
         path: "wrappers/swift/Sources/DemoWriter"
     ),
+    .testTarget(
+        name: "ZXingCppTests",
+        dependencies: ["ZXingCpp"],
+        path: "wrappers/swift/Tests/ZXingCppTests"
+    ),
 ]
 
 let package = Package(

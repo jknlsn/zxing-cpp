@@ -15,7 +15,7 @@ func main() throws {
 		let name = (args.first as NSString?)?.lastPathComponent ?? "demo_reader"
 		fputs("Usage: \(name) <image_file> [formats] [--fast]\n", stderr)
 		fputs("Example: \(name) barcode.png QRCode,EAN13 --fast\n", stderr)
-		fputs("Supported formats: \(BarcodeFormats.list(.allReadable).map { $0.description }.joined(separator: ", "))\n", stderr)
+		fputs("Supported formats: \(BarcodeFormat.all(matching: .allReadable).map { $0.description }.joined(separator: ", "))\n", stderr)
 		exit(1)
 	}
 
@@ -23,14 +23,22 @@ func main() throws {
 	let formatsStr = args.count > 2 && !args[2].hasPrefix("--") ? args[2] : ""
 	let fast = args.contains("--fast")
 
-	guard let formats = BarcodeFormats(string: formatsStr) else {
+	guard let formats = BarcodeFormat.formats(from: formatsStr) else {
 		fputs("Error: Invalid format string '\(formatsStr)'\n", stderr)
-		fputs("Supported formats: \(BarcodeFormats.list(.allReadable).map { $0.description }.joined(separator: ", "))\n", stderr)
+		fputs("Supported formats: \(BarcodeFormat.all(matching: .allReadable).map { $0.description }.joined(separator: ", "))\n", stderr)
 		exit(1)
 	}
 
-	let reader = BarcodeReader(formats: formats, tryHarder: !fast, tryRotate: !fast, tryInvert: !fast, tryDownscale: !fast,
-		returnErrors: true )
+	let reader = BarcodeReader(
+		configuration: .init(
+			formats: formats,
+			tryHarder: !fast,
+			tryRotate: !fast,
+			tryInvert: !fast,
+			tryDownscale: !fast,
+			returnErrors: true
+		)
+	)
 
 #if canImport(CoreGraphics)
 	print("Reading barcodes from '\(filename)'...")
@@ -59,7 +67,7 @@ func main() throws {
 			print("Error:      \(barcode.errorMessage)")
 			print("Rotation:   \(barcode.orientation)")
 			print("Position:   \(barcode.position)")
-			print("Extra:      \(barcode.extra())")
+			print("Extra:      \(barcode.metadata(forKey: nil))")
 			if barcode != barcodes.last {
 				print()
 			}
