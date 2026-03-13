@@ -197,6 +197,7 @@ private extension Code128Options {
 		CreatorOptions(
 			eci: try eci?.serializedValue(),
 			gs1: gs1,
+			extraEsc: extraEsc,
 			readerInit: readerInit
 		)
 	}

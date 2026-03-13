@@ -36,6 +36,9 @@ public struct BarcodeReader: Sendable, CustomDebugStringConvertible {
 		/// Return invalid barcodes with error information instead of skipping them.
 		public var returnErrors: Bool
 
+		/// Include Code128 internals (raw codes/start set/checksum) in metadata.
+		public var returnCode128Details: Bool
+
 		/// The binarization algorithm for converting grayscale to black/white.
 		public var binarizer: Binarizer
 
@@ -65,6 +68,7 @@ public struct BarcodeReader: Sendable, CustomDebugStringConvertible {
 			tryDownscale: Bool,
 			isPure: Bool,
 			returnErrors: Bool,
+			returnCode128Details: Bool,
 			binarizer: Binarizer,
 			textMode: TextMode,
 			characterSet: CharacterSet,
@@ -82,6 +86,7 @@ public struct BarcodeReader: Sendable, CustomDebugStringConvertible {
 					tryDownscale: true,
 					isPure: false,
 					returnErrors: false,
+					returnCode128Details: false,
 					binarizer: .localAverage,
 					textMode: .hri,
 					characterSet: .unknown,
@@ -99,6 +104,7 @@ public struct BarcodeReader: Sendable, CustomDebugStringConvertible {
 				tryDownscale: ZXing_ReaderOptions_getTryDownscale(handle),
 				isPure: ZXing_ReaderOptions_getIsPure(handle),
 				returnErrors: ZXing_ReaderOptions_getReturnErrors(handle),
+				returnCode128Details: ZXing_ReaderOptions_getReturnCode128Details(handle),
 				binarizer: swiftEnum(sEnum(ZXing_ReaderOptions_getBinarizer(handle))) ?? .localAverage,
 				textMode: swiftEnum(sEnum(ZXing_ReaderOptions_getTextMode(handle))) ?? .hri,
 				characterSet: swiftEnum(sEnum(ZXing_ReaderOptions_getCharacterSet(handle))) ?? .unknown,
@@ -117,6 +123,7 @@ public struct BarcodeReader: Sendable, CustomDebugStringConvertible {
 			tryDownscale: Bool? = nil,
 			isPure: Bool? = nil,
 			returnErrors: Bool? = nil,
+			returnCode128Details: Bool? = nil,
 			binarizer: Binarizer? = nil,
 			textMode: TextMode? = nil,
 			characterSet: CharacterSet? = nil,
@@ -132,6 +139,7 @@ public struct BarcodeReader: Sendable, CustomDebugStringConvertible {
 			self.tryDownscale = tryDownscale ?? Self.cDefaults.tryDownscale
 			self.isPure = isPure ?? Self.cDefaults.isPure
 			self.returnErrors = returnErrors ?? Self.cDefaults.returnErrors
+			self.returnCode128Details = returnCode128Details ?? Self.cDefaults.returnCode128Details
 			self.binarizer = binarizer ?? Self.cDefaults.binarizer
 			self.textMode = textMode ?? Self.cDefaults.textMode
 			self.characterSet = characterSet ?? Self.cDefaults.characterSet
@@ -153,6 +161,7 @@ public struct BarcodeReader: Sendable, CustomDebugStringConvertible {
 			lhs.tryDownscale == rhs.tryDownscale &&
 			lhs.isPure == rhs.isPure &&
 			lhs.returnErrors == rhs.returnErrors &&
+			lhs.returnCode128Details == rhs.returnCode128Details &&
 			lhs.binarizer == rhs.binarizer &&
 			lhs.textMode == rhs.textMode &&
 			lhs.characterSet == rhs.characterSet &&
@@ -170,6 +179,7 @@ public struct BarcodeReader: Sendable, CustomDebugStringConvertible {
 			hasher.combine(tryDownscale)
 			hasher.combine(isPure)
 			hasher.combine(returnErrors)
+			hasher.combine(returnCode128Details)
 			hasher.combine(binarizer)
 			hasher.combine(textMode)
 			hasher.combine(characterSet)
@@ -234,6 +244,7 @@ func withCReaderOptions<T>(_ configuration: BarcodeReader.Configuration, _ body:
 	ZXing_ReaderOptions_setTryDownscale(handle, configuration.tryDownscale)
 	ZXing_ReaderOptions_setIsPure(handle, configuration.isPure)
 	ZXing_ReaderOptions_setReturnErrors(handle, configuration.returnErrors)
+	ZXing_ReaderOptions_setReturnCode128Details(handle, configuration.returnCode128Details)
 	ZXing_ReaderOptions_setBinarizer(handle, try checkedCEnum(configuration.binarizer.rawValue))
 	ZXing_ReaderOptions_setTextMode(handle, try checkedCEnum(configuration.textMode.rawValue))
 	ZXing_ReaderOptions_setCharacterSet(handle, try checkedCEnum(configuration.characterSet.rawValue))

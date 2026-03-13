@@ -27,6 +27,9 @@ public struct CreatorOptions: Sendable, Hashable {
 	/// Serialized only when `true`; `false` is omitted to match the native creator's presence-based semantics.
 	public var gs1: Bool?
 
+	/// Whether to enable Code 128 extra escape processing (`\^A`, `\^B`, `\^C`, `\^@`, `\^1`).
+	/// Serialized only when `true`; `false` is omitted to match the native creator's presence-based semantics.
+	public var extraEsc: Bool?
 
 	/// Whether this is a Reader Initialisation symbol.
 	/// Serialized only when `true`; `false` is omitted to match the native creator's presence-based semantics.
@@ -52,6 +55,7 @@ public struct CreatorOptions: Sendable, Hashable {
 		ecLevel: String? = nil,
 		eci: String? = nil,
 		gs1: Bool? = nil,
+		extraEsc: Bool? = nil,
 		readerInit: Bool? = nil,
 		forceSquare: Bool? = nil,
 		columns: Int? = nil,
@@ -62,6 +66,7 @@ public struct CreatorOptions: Sendable, Hashable {
 		self.ecLevel = ecLevel
 		self.eci = eci
 		self.gs1 = gs1
+		self.extraEsc = extraEsc
 		self.readerInit = readerInit
 		self.forceSquare = forceSquare
 		self.columns = columns
@@ -81,6 +86,9 @@ public struct CreatorOptions: Sendable, Hashable {
 		}
 		if gs1 == true {
 			object["GS1"] = true
+		}
+		if extraEsc == true {
+			object["ExtraEsc"] = true
 		}
 		if readerInit == true {
 			object["ReaderInit"] = true

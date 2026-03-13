@@ -180,13 +180,17 @@ public struct Code128Options: Sendable, Hashable {
 	/// Whether the payload is GS1 data.
 	/// Serialized only when `true`; `false` is omitted to match the native creator's presence-based semantics.
 	public var gs1: Bool?
+	/// Whether to enable Code 128 extra escape processing (`\^A`, `\^B`, `\^C`, `\^@`, `\^1`).
+	/// Serialized only when `true`; `false` is omitted to match the native creator's presence-based semantics.
+	public var extraEsc: Bool?
 	/// Whether to mark the symbol as Reader Initialization.
 	/// Serialized only when `true`; `false` is omitted to match the native creator's presence-based semantics.
 	public var readerInit: Bool?
 
-	public init(eci: ECI? = nil, gs1: Bool? = nil, readerInit: Bool? = nil) {
+	public init(eci: ECI? = nil, gs1: Bool? = nil, extraEsc: Bool? = nil, readerInit: Bool? = nil) {
 		self.eci = eci
 		self.gs1 = gs1
+		self.extraEsc = extraEsc
 		self.readerInit = readerInit
 	}
 }
