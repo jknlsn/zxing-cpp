@@ -7,7 +7,7 @@ import Foundation
 // MARK: - Error
 
 /// Error type for ZXing operations.
-public struct ZXingError: Error, LocalizedError, CustomStringConvertible {
+public struct ZXingError: Error, LocalizedError, CustomStringConvertible, Sendable {
 	public let message: String
 	public var description: String { message }
 	public var errorDescription: String? { message }
@@ -40,12 +40,33 @@ private func lastError() -> ZXingError {
 	return ZXingError("Unknown ZXing error")
 }
 
-/// Bridge our Int32-based Swift types to/from C enum types (imported with UInt32 rawValue).
-private func cEnum<T: RawRepresentable>(_ v: Int32) -> T where T.RawValue == UInt32 {
-	T(rawValue: UInt32(bitPattern: v))!
+private func unknownCEnumError<T>(_ raw: Int32, type: T.Type = T.self) -> ZXingError {
+	ZXingError(
+		"Unknown C enum value \(raw) for \(T.self). This may indicate a version mismatch between the Swift wrapper and the native ZXing library."
+	)
 }
+
+/// Bridge our Int32-based Swift types to/from C enum types (imported with UInt32 rawValue).
+private func cEnum<T: RawRepresentable>(_ v: Int32) -> T? where T.RawValue == UInt32 {
+	T(rawValue: UInt32(bitPattern: v))
+}
+
+private func checkedCEnum<T: RawRepresentable>(_ v: Int32) throws -> T where T.RawValue == UInt32 {
+	guard let result: T = cEnum(v) else { throw unknownCEnumError(v, type: T.self) }
+	return result
+}
+
 private func sEnum<T: RawRepresentable>(_ v: T) -> Int32 where T.RawValue == UInt32 {
 	Int32(bitPattern: v.rawValue)
+}
+
+private func swiftEnum<T: RawRepresentable>(_ raw: Int32) -> T? where T.RawValue == Int32 {
+	T(rawValue: raw)
+}
+
+private func checkedSwiftEnum<T: RawRepresentable>(_ raw: Int32) throws -> T where T.RawValue == Int32 {
+	guard let result: T = swiftEnum(raw) else { throw unknownCEnumError(raw, type: T.self) }
+	return result
 }
 
 /// Returns the native zxing-cpp library version string.
@@ -63,10 +84,16 @@ public struct BarcodeFormat: RawRepresentable, Hashable, Sendable, CustomStringC
 	public let rawValue: Int32
 	public init(rawValue: Int32) { self.rawValue = rawValue }
 
-	public var description: String { c2s(ZXing_BarcodeFormatToString(cEnum(rawValue))) }
+	public var description: String {
+		guard let cValue: ZXing_BarcodeFormat = cEnum(rawValue) else { return "Unknown(\(rawValue))" }
+		return c2s(ZXing_BarcodeFormatToString(cValue))
+	}
 
 	/// The base symbology for this format (e.g., `.ean13` returns `.eanUPC`).
-	public var symbology: BarcodeFormat { BarcodeFormat(rawValue: sEnum(ZXing_BarcodeFormatSymbology(cEnum(rawValue)))) }
+	public var symbology: BarcodeFormat {
+		guard let cValue: ZXing_BarcodeFormat = cEnum(rawValue) else { return self }
+		return BarcodeFormat(rawValue: sEnum(ZXing_BarcodeFormatSymbology(cValue)))
+	}
 
 	/// Parses a format name string into a `BarcodeFormat`. Returns `nil` on failure.
 	public init?(string: String) {
@@ -149,7 +176,8 @@ extension Array where Element == BarcodeFormat {
 	/// Returns individual formats matching the given filter.
 	public static func list(_ filter: BarcodeFormat = .all) -> Self {
 		var count: Int32 = 0
-		guard let ptr = ZXing_BarcodeFormatsList(cEnum(filter.rawValue), &count), count > 0 else { return [] }
+		guard let cFilter: ZXing_BarcodeFormat = cEnum(filter.rawValue) else { return [] }
+		guard let ptr = ZXing_BarcodeFormatsList(cFilter, &count), count > 0 else { return [] }
 		let formats = (0..<Int(count)).map { BarcodeFormat(rawValue: sEnum(ptr[$0])) }
 		ZXing_free(ptr)
 		return formats
@@ -171,11 +199,18 @@ extension Array where Element == BarcodeFormat {
 	}
 }
 
+private func checkedBarcodeFormat(_ format: BarcodeFormat) throws -> ZXing_BarcodeFormat {
+	guard let cFormat: ZXing_BarcodeFormat = cEnum(format.rawValue) else {
+		throw unknownCEnumError(format.rawValue, type: BarcodeFormat.self)
+	}
+	return cFormat
+}
+
 private extension Array where Element == BarcodeFormat {
-	func withCFormats<T>(_ body: (UnsafePointer<ZXing_BarcodeFormat>?, Int32) -> T) -> T {
-		let raw: [ZXing_BarcodeFormat] = map { cEnum($0.rawValue) }
-		return raw.withUnsafeBufferPointer { buf in
-			body(buf.baseAddress, Int32(buf.count))
+	func withCFormats<T>(_ body: (UnsafePointer<ZXing_BarcodeFormat>?, Int32) throws -> T) throws -> T {
+		let raw: [ZXing_BarcodeFormat] = try map(checkedBarcodeFormat)
+		return try raw.withUnsafeBufferPointer { buf in
+			try body(buf.baseAddress, Int32(buf.count))
 		}
 	}
 }
@@ -202,7 +237,10 @@ public enum ContentType: Int32, Sendable, CustomStringConvertible {
 	case iso15434   = 4
 	case unknownECI = 5
 
-	public var description: String { c2s(ZXing_ContentTypeToString(cEnum(rawValue))) }
+	public var description: String {
+		guard let cValue: ZXing_ContentType = cEnum(rawValue) else { return "unknown" }
+		return c2s(ZXing_ContentTypeToString(cValue))
+	}
 }
 
 public enum ErrorType: Int32, Sendable {
@@ -284,8 +322,9 @@ public class ImageView {
 	private static func makeHandle(
 		pointer: UnsafePointer<UInt8>?, size: Int, width: Int, height: Int, format: ImageFormat, rowStride: Int, pixStride: Int
 	) throws -> OpaquePointer {
+		let cFormat: ZXing_ImageFormat = try checkedCEnum(format.rawValue)
 		guard let iv = ZXing_ImageView_new_checked(
-			pointer, Int32(size), Int32(width), Int32(height), cEnum(format.rawValue), Int32(rowStride), Int32(pixStride)
+			pointer, Int32(size), Int32(width), Int32(height), cFormat, Int32(rowStride), Int32(pixStride)
 		) else {
 			throw lastError()
 		}
@@ -294,11 +333,13 @@ public class ImageView {
 
 	/// Creates an ImageView from Data without additional pixel buffer copying.
 	public init( data: Data, width: Int, height: Int, format: ImageFormat, rowStride: Int = 0, pixStride: Int = 0) throws {
-		_handle = try data.withUnsafeBytes { rawBuffer in
-			return try Self.makeHandle(pointer: rawBuffer.bindMemory(to: UInt8.self).baseAddress, size: data.count,
-				width: width, height: height, format: format, rowStride: rowStride, pixStride: pixStride)
-		}
-		_retainedSource = data as NSData
+		let nsData = data as NSData
+		let pointer: UnsafePointer<UInt8>? = nsData.length > 0
+			? nsData.bytes.bindMemory(to: UInt8.self, capacity: nsData.length)
+			: nil
+		_handle = try Self.makeHandle(pointer: pointer, size: nsData.length,
+			width: width, height: height, format: format, rowStride: rowStride, pixStride: pixStride)
+		_retainedSource = nsData
 	}
 
 	/// Creates an ImageView from an external data source. The source is retained to keep the pointer valid.
@@ -350,72 +391,133 @@ public class Image {
 // MARK: - WriterOptions
 
 /// Options for rendering barcodes to images or SVG.
-public class WriterOptions {
-	internal let _handle: OpaquePointer
-
-	public init() {
-		_handle = ZXing_WriterOptions_new()!
-	}
-
-	public convenience init( scale: Int? = nil,	rotate: Int? = nil,	addHRT: Bool? = nil, addQuietZones: Bool? = nil) {
-		self.init()
-		if let scale { self.scale = scale }
-		if let rotate { self.rotate = rotate }
-		if let addHRT { self.addHRT = addHRT }
-		if let addQuietZones { self.addQuietZones = addQuietZones }
-	}
-
-	deinit { ZXing_WriterOptions_delete(_handle) }
-
+public struct WriterOptions: Sendable, Hashable {
 	/// Scaling factor (>0: pixels per module, <0: target size in pixels).
-	public var scale: Int {
-		get { Int(ZXing_WriterOptions_getScale(_handle)) }
-		set { ZXing_WriterOptions_setScale(_handle, Int32(newValue)) }
-	}
+	public var scale: Int
 
 	/// Rotation in degrees (0, 90, 180, or 270).
-	public var rotate: Int {
-		get { Int(ZXing_WriterOptions_getRotate(_handle)) }
-		set { ZXing_WriterOptions_setRotate(_handle, Int32(newValue)) }
-	}
+	public var rotate: Int
 
 	/// Add human-readable text below linear barcodes.
-	public var addHRT: Bool {
-		get { ZXing_WriterOptions_getAddHRT(_handle) }
-		set { ZXing_WriterOptions_setAddHRT(_handle, newValue) }
-	}
+	public var addHRT: Bool
 
 	/// Add quiet zones (white margins) around the barcode.
-	public var addQuietZones: Bool {
-		get { ZXing_WriterOptions_getAddQuietZones(_handle) }
-		set { ZXing_WriterOptions_setAddQuietZones(_handle, newValue) }
+	public var addQuietZones: Bool
+
+	private static let cDefaults: (scale: Int, rotate: Int, addHRT: Bool, addQuietZones: Bool) = {
+		let handle = ZXing_WriterOptions_new()!
+		defer { ZXing_WriterOptions_delete(handle) }
+		return (
+			scale: Int(ZXing_WriterOptions_getScale(handle)),
+			rotate: Int(ZXing_WriterOptions_getRotate(handle)),
+			addHRT: ZXing_WriterOptions_getAddHRT(handle),
+			addQuietZones: ZXing_WriterOptions_getAddQuietZones(handle)
+		)
+	}()
+
+	public init(scale: Int? = nil, rotate: Int? = nil, addHRT: Bool? = nil, addQuietZones: Bool? = nil) {
+		self.scale = scale ?? Self.cDefaults.scale
+		self.rotate = rotate ?? Self.cDefaults.rotate
+		self.addHRT = addHRT ?? Self.cDefaults.addHRT
+		self.addQuietZones = addQuietZones ?? Self.cDefaults.addQuietZones
 	}
+}
+
+private func withCWriterOptions<T>(_ options: WriterOptions, _ body: (OpaquePointer) throws -> T) throws -> T {
+	guard let handle = ZXing_WriterOptions_new() else { throw lastError() }
+	defer { ZXing_WriterOptions_delete(handle) }
+
+	ZXing_WriterOptions_setScale(handle, Int32(options.scale))
+	ZXing_WriterOptions_setRotate(handle, Int32(options.rotate))
+	ZXing_WriterOptions_setAddHRT(handle, options.addHRT)
+	ZXing_WriterOptions_setAddQuietZones(handle, options.addQuietZones)
+
+	return try body(handle)
 }
 
 // MARK: - Barcode
 
+/// Retains the native barcode handle for operations that cannot be eagerly copied.
+/// Access is serialized so `Barcode` can safely remain `Sendable` at the Swift layer.
+private final class NativeBarcodeStorage: @unchecked Sendable {
+	private let handle: OpaquePointer
+	private let lock = NSLock()
+	var handleIdentity: UInt { UInt(bitPattern: handle) }
+
+	init(_ handle: OpaquePointer) { self.handle = handle }
+
+	deinit { ZXing_Barcode_delete(handle) }
+
+	func extra(key: String) -> String {
+		lock.lock()
+		defer { lock.unlock() }
+		return key.withCString { c2s(ZXing_Barcode_extra(handle, $0)) }
+	}
+
+	func toSVG(_ options: WriterOptions?) throws -> String {
+		lock.lock()
+		defer { lock.unlock() }
+		return try withCWriterOptions(options ?? .init()) { optionsHandle in
+			guard let ptr = ZXing_WriteBarcodeToSVG(handle, optionsHandle) else { throw lastError() }
+			return c2s(ptr)
+		}
+	}
+
+	func toImage(_ options: WriterOptions?) throws -> Image {
+		lock.lock()
+		defer { lock.unlock() }
+		return try withCWriterOptions(options ?? .init()) { optionsHandle in
+			guard let ptr = ZXing_WriteBarcodeToImage(handle, optionsHandle) else { throw lastError() }
+			return Image(ptr)
+		}
+	}
+}
+
 /// A detected or created barcode.
-public class Barcode: Equatable, Hashable {
-	internal let _handle: OpaquePointer
+public struct Barcode: Sendable, Equatable, Hashable {
+	private let storage: NativeBarcodeStorage
+	private let extraJSON: String
 
-	internal init(_ handle: OpaquePointer) { _handle = handle }
-
-	deinit { ZXing_Barcode_delete(_handle) }
+	internal init(_ handle: OpaquePointer) throws {
+		storage = NativeBarcodeStorage(handle)
+		isValid = ZXing_Barcode_isValid(handle)
+		format = BarcodeFormat(rawValue: sEnum(ZXing_Barcode_format(handle)))
+		symbology = BarcodeFormat(rawValue: sEnum(ZXing_Barcode_symbology(handle)))
+		contentType = try checkedSwiftEnum(sEnum(ZXing_Barcode_contentType(handle)))
+		text = c2s(ZXing_Barcode_text(handle))
+		var len: Int32 = 0
+		bytes = c2bytes(ZXing_Barcode_bytes(handle, &len), len)
+		var eciLen: Int32 = 0
+		bytesECI = c2bytes(ZXing_Barcode_bytesECI(handle, &eciLen), eciLen)
+		symbologyIdentifier = c2s(ZXing_Barcode_symbologyIdentifier(handle))
+		position = Position(ZXing_Barcode_position(handle))
+		orientation = Int(ZXing_Barcode_orientation(handle))
+		hasECI = ZXing_Barcode_hasECI(handle)
+		isInverted = ZXing_Barcode_isInverted(handle)
+		isMirrored = ZXing_Barcode_isMirrored(handle)
+		lineCount = Int(ZXing_Barcode_lineCount(handle))
+		sequenceIndex = Int(ZXing_Barcode_sequenceIndex(handle))
+		sequenceSize = Int(ZXing_Barcode_sequenceSize(handle))
+		sequenceId = c2s(ZXing_Barcode_sequenceId(handle))
+		errorType = try checkedSwiftEnum(sEnum(ZXing_Barcode_errorType(handle)))
+		errorMessage = c2s(ZXing_Barcode_errorMsg(handle))
+		extraJSON = c2s(ZXing_Barcode_extra(handle, nil))
+	}
 
 	/// Creates a barcode from text content.
-	public convenience init(_ text: String, format: BarcodeFormat, options: String? = nil) throws {
-		guard let opts = ZXing_CreatorOptions_new(cEnum(format.rawValue)) else { throw lastError() }
+	public init(_ text: String, format: BarcodeFormat, options: String? = nil) throws {
+		guard let opts = ZXing_CreatorOptions_new(try checkedBarcodeFormat(format)) else { throw lastError() }
 		defer { ZXing_CreatorOptions_delete(opts) }
 		if let options {
 			options.withCString { ZXing_CreatorOptions_setOptions(opts, $0) }
 		}
 		guard let bc = ZXing_CreateBarcodeFromText(text, 0, opts) else { throw lastError() }
-		self.init(bc)
+		self = try Barcode(bc)
 	}
 
 	/// Creates a barcode from binary data.
-	public convenience init(bytes: Data, format: BarcodeFormat, options: String? = nil) throws {
-		guard let opts = ZXing_CreatorOptions_new(cEnum(format.rawValue)) else { throw lastError() }
+	public init(bytes: Data, format: BarcodeFormat, options: String? = nil) throws {
+		guard let opts = ZXing_CreatorOptions_new(try checkedBarcodeFormat(format)) else { throw lastError() }
 		defer { ZXing_CreatorOptions_delete(opts) }
 		if let options {
 			options.withCString { ZXing_CreatorOptions_setOptions(opts, $0) }
@@ -424,99 +526,89 @@ public class Barcode: Equatable, Hashable {
 			ZXing_CreateBarcodeFromBytes(buffer.baseAddress, Int32(buffer.count), opts)
 		}
 		guard let bc else { throw lastError() }
-		self.init(bc)
+		self = try Barcode(bc)
 	}
 
 	/// Whether the barcode was successfully decoded or created.
-	public var isValid: Bool { ZXing_Barcode_isValid(_handle) }
+	public let isValid: Bool
 
 	/// The barcode format (e.g., `.qrCode`, `.ean13`).
-	public var format: BarcodeFormat { BarcodeFormat(rawValue: sEnum(ZXing_Barcode_format(_handle))) }
+	public let format: BarcodeFormat
 
 	/// The base symbology (e.g., `.ean13` returns `.eanUPC`).
-	public var symbology: BarcodeFormat { BarcodeFormat(rawValue: sEnum(ZXing_Barcode_symbology(_handle))) }
+	public let symbology: BarcodeFormat
 
 	/// The content type of the decoded data.
-	public var contentType: ContentType { ContentType(rawValue: sEnum(ZXing_Barcode_contentType(_handle)))! }
+	public let contentType: ContentType
 
 	/// The decoded text content.
-	public var text: String { c2s(ZXing_Barcode_text(_handle)) }
+	public let text: String
 
 	/// The raw decoded bytes.
-	public var bytes: Data {
-		var len: Int32 = 0
-		return c2bytes(ZXing_Barcode_bytes(_handle, &len), len)
-	}
+	public let bytes: Data
 
 	/// The decoded bytes with ECI markers included.
-	public var bytesECI: Data {
-		var len: Int32 = 0
-		return c2bytes(ZXing_Barcode_bytesECI(_handle, &len), len)
-	}
+	public let bytesECI: Data
 
 	/// ISO/IEC 15424 symbology identifier (e.g., "]Q1" for QR Code).
-	public var symbologyIdentifier: String { c2s(ZXing_Barcode_symbologyIdentifier(_handle)) }
+	public let symbologyIdentifier: String
 
 	/// Corner points of the barcode in the image.
-	public var position: Position { Position(ZXing_Barcode_position(_handle)) }
+	public let position: Position
 
 	/// Detected rotation in degrees.
-	public var orientation: Int { Int(ZXing_Barcode_orientation(_handle)) }
+	public let orientation: Int
 
 	/// Whether the barcode uses Extended Channel Interpretation.
-	public var hasECI: Bool { ZXing_Barcode_hasECI(_handle) }
+	public let hasECI: Bool
 
 	/// Whether the barcode was detected as light-on-dark.
-	public var isInverted: Bool { ZXing_Barcode_isInverted(_handle) }
+	public let isInverted: Bool
 
 	/// Whether the barcode was detected as mirrored.
-	public var isMirrored: Bool { ZXing_Barcode_isMirrored(_handle) }
+	public let isMirrored: Bool
 
 	/// Number of detected scan lines (for linear barcodes).
-	public var lineCount: Int { Int(ZXing_Barcode_lineCount(_handle)) }
+	public let lineCount: Int
 
 	/// Index of this barcode in a structured append sequence.
-	public var sequenceIndex: Int { Int(ZXing_Barcode_sequenceIndex(_handle)) }
+	public let sequenceIndex: Int
 
 	/// Total number of barcodes in a structured append sequence.
-	public var sequenceSize: Int { Int(ZXing_Barcode_sequenceSize(_handle)) }
+	public let sequenceSize: Int
 
 	/// Identifier of the structured append sequence.
-	public var sequenceId: String { c2s(ZXing_Barcode_sequenceId(_handle)) }
+	public let sequenceId: String
 
 	/// The error type if decoding encountered an issue.
-	public var errorType: ErrorType { ErrorType(rawValue: sEnum(ZXing_Barcode_errorType(_handle)))! }
+	public let errorType: ErrorType
 
 	/// The error message if decoding encountered an issue.
-	public var errorMessage: String { c2s(ZXing_Barcode_errorMsg(_handle)) }
+	public let errorMessage: String
 
 	/// Additional format-specific metadata as JSON.
 	/// - Parameter key: Optional key to retrieve a specific value. Pass `nil` for the full JSON object.
 	public func extra(key: String? = nil) -> String {
-		if let key {
-			return key.withCString { c2s(ZXing_Barcode_extra(_handle, $0)) }
-		}
-		return c2s(ZXing_Barcode_extra(_handle, nil))
+		guard let key else { return extraJSON }
+		return storage.extra(key: key)
 	}
 
 	/// Renders the barcode as an SVG string.
 	public func toSVG(_ options: WriterOptions? = nil) throws -> String {
-		guard let ptr = ZXing_WriteBarcodeToSVG(_handle, options?._handle) else { throw lastError() }
-		return c2s(ptr)
+		try storage.toSVG(options)
 	}
 
 	/// Renders the barcode as a grayscale image.
 	public func toImage(_ options: WriterOptions? = nil) throws -> Image {
-		guard let ptr = ZXing_WriteBarcodeToImage(_handle, options?._handle) else { throw lastError() }
-		return Image(ptr)
+		try storage.toImage(options)
 	}
 
 	public static func == (lhs: Barcode, rhs: Barcode) -> Bool {
-		lhs._handle == rhs._handle
+		lhs.storage.handleIdentity == rhs.storage.handleIdentity
 	}
 
 	public func hash(into hasher: inout Hasher) {
-		hasher.combine(UInt(bitPattern: _handle))
+		hasher.combine(storage.handleIdentity)
 	}
 }
 
@@ -529,14 +621,54 @@ public class Barcode: Equatable, Hashable {
 /// let reader = BarcodeReader(formats: [.qrCode, .ean13], returnErrors: true)
 /// let barcodes = try reader.read(from: imageView)
 /// ```
-public class BarcodeReader {
-	internal let _handle: OpaquePointer
+public struct BarcodeReader: Sendable {
+	public var formats: [BarcodeFormat]
+	public var tryHarder: Bool
+	public var tryRotate: Bool
+	public var tryInvert: Bool
+	public var tryDownscale: Bool
+	public var isPure: Bool
+	public var returnErrors: Bool
+	public var binarizer: Binarizer
+	public var textMode: TextMode
+	public var minLineCount: Int
+	public var maxNumberOfSymbols: Int
+	public var eanAddOnSymbol: EanAddOnSymbol
+	public var validateOptionalChecksum: Bool
 
-	public init() {
-		_handle = ZXing_ReaderOptions_new()!
-	}
+	private static let cDefaults: (
+		tryHarder: Bool,
+		tryRotate: Bool,
+		tryInvert: Bool,
+		tryDownscale: Bool,
+		isPure: Bool,
+		returnErrors: Bool,
+		binarizer: Binarizer,
+		textMode: TextMode,
+		minLineCount: Int,
+		maxNumberOfSymbols: Int,
+		eanAddOnSymbol: EanAddOnSymbol,
+		validateOptionalChecksum: Bool
+	) = {
+		let handle = ZXing_ReaderOptions_new()!
+		defer { ZXing_ReaderOptions_delete(handle) }
+		return (
+			tryHarder: ZXing_ReaderOptions_getTryHarder(handle),
+			tryRotate: ZXing_ReaderOptions_getTryRotate(handle),
+			tryInvert: ZXing_ReaderOptions_getTryInvert(handle),
+			tryDownscale: ZXing_ReaderOptions_getTryDownscale(handle),
+			isPure: ZXing_ReaderOptions_getIsPure(handle),
+			returnErrors: ZXing_ReaderOptions_getReturnErrors(handle),
+			binarizer: swiftEnum(sEnum(ZXing_ReaderOptions_getBinarizer(handle))) ?? .localAverage,
+			textMode: swiftEnum(sEnum(ZXing_ReaderOptions_getTextMode(handle))) ?? .hri,
+			minLineCount: Int(ZXing_ReaderOptions_getMinLineCount(handle)),
+			maxNumberOfSymbols: Int(ZXing_ReaderOptions_getMaxNumberOfSymbols(handle)),
+			eanAddOnSymbol: swiftEnum(sEnum(ZXing_ReaderOptions_getEanAddOnSymbol(handle))) ?? .ignore,
+			validateOptionalChecksum: ZXing_ReaderOptions_getValidateOptionalChecksum(handle)
+		)
+	}()
 
-	public convenience init(
+	public init(
 		formats: [BarcodeFormat]? = nil,
 		tryHarder: Bool? = nil,
 		tryRotate: Bool? = nil,
@@ -551,122 +683,64 @@ public class BarcodeReader {
 		eanAddOnSymbol: EanAddOnSymbol? = nil,
 		validateOptionalChecksum: Bool? = nil
 	) {
-		self.init()
-		if let formats { self.formats = formats }
-		if let tryHarder { self.tryHarder = tryHarder }
-		if let tryRotate { self.tryRotate = tryRotate }
-		if let tryInvert { self.tryInvert = tryInvert }
-		if let tryDownscale { self.tryDownscale = tryDownscale }
-		if let isPure { self.isPure = isPure }
-		if let returnErrors { self.returnErrors = returnErrors }
-		if let binarizer { self.binarizer = binarizer }
-		if let textMode { self.textMode = textMode }
-		if let minLineCount { self.minLineCount = minLineCount }
-		if let maxNumberOfSymbols { self.maxNumberOfSymbols = maxNumberOfSymbols }
-		if let eanAddOnSymbol { self.eanAddOnSymbol = eanAddOnSymbol }
-		if let validateOptionalChecksum { self.validateOptionalChecksum = validateOptionalChecksum }
-	}
-
-	deinit { ZXing_ReaderOptions_delete(_handle) }
-
-	/// Barcode formats to search for. Empty means all supported formats.
-	public var formats: [BarcodeFormat] {
-		get {
-			var count: Int32 = 0
-			guard let ptr = ZXing_ReaderOptions_getFormats(_handle, &count), count > 0 else { return [] }
-			let result = (0..<Int(count)).map { BarcodeFormat(rawValue: sEnum(ptr[$0])) }
-			ZXing_free(ptr)
-			return result
-		}
-		set {
-			newValue.withCFormats { ptr, count in
-				ZXing_ReaderOptions_setFormats(_handle, ptr, count)
-			}
-		}
-	}
-
-	/// Spend more time to find barcodes; slower but more accurate.
-	public var tryHarder: Bool {
-		get { ZXing_ReaderOptions_getTryHarder(_handle) }
-		set { ZXing_ReaderOptions_setTryHarder(_handle, newValue) }
-	}
-
-	/// Also detect barcodes in 90/180/270 degree rotated images.
-	public var tryRotate: Bool {
-		get { ZXing_ReaderOptions_getTryRotate(_handle) }
-		set { ZXing_ReaderOptions_setTryRotate(_handle, newValue) }
-	}
-
-	/// Also try detecting inverted (white on black) barcodes.
-	public var tryInvert: Bool {
-		get { ZXing_ReaderOptions_getTryInvert(_handle) }
-		set { ZXing_ReaderOptions_setTryInvert(_handle, newValue) }
-	}
-
-	/// Try downscaled images (high resolution images can hamper the detection).
-	public var tryDownscale: Bool {
-		get { ZXing_ReaderOptions_getTryDownscale(_handle) }
-		set { ZXing_ReaderOptions_setTryDownscale(_handle, newValue) }
-	}
-
-	/// Assume the image contains only a single, perfectly aligned barcode.
-	public var isPure: Bool {
-		get { ZXing_ReaderOptions_getIsPure(_handle) }
-		set { ZXing_ReaderOptions_setIsPure(_handle, newValue) }
-	}
-
-	/// Return invalid barcodes with error information instead of skipping them.
-	public var returnErrors: Bool {
-		get { ZXing_ReaderOptions_getReturnErrors(_handle) }
-		set { ZXing_ReaderOptions_setReturnErrors(_handle, newValue) }
-	}
-
-	/// The binarization algorithm for converting grayscale to black/white.
-	public var binarizer: Binarizer {
-		get { Binarizer(rawValue: sEnum(ZXing_ReaderOptions_getBinarizer(_handle)))! }
-		set { ZXing_ReaderOptions_setBinarizer(_handle, cEnum(newValue.rawValue)) }
-	}
-
-	/// Text encoding mode for converting barcode content bytes to strings.
-	public var textMode: TextMode {
-		get { TextMode(rawValue: sEnum(ZXing_ReaderOptions_getTextMode(_handle)))! }
-		set { ZXing_ReaderOptions_setTextMode(_handle, cEnum(newValue.rawValue)) }
-	}
-
-	/// Minimum number of lines for linear barcodes (default is 2).
-	public var minLineCount: Int {
-		get { Int(ZXing_ReaderOptions_getMinLineCount(_handle)) }
-		set { ZXing_ReaderOptions_setMinLineCount(_handle, Int32(newValue)) }
-	}
-
-	/// Maximum number of symbols to detect.
-	public var maxNumberOfSymbols: Int {
-		get { Int(ZXing_ReaderOptions_getMaxNumberOfSymbols(_handle)) }
-		set { ZXing_ReaderOptions_setMaxNumberOfSymbols(_handle, Int32(newValue)) }
-	}
-
-	/// Handling of EAN-2/EAN-5 Add-On symbols.
-	public var eanAddOnSymbol: EanAddOnSymbol {
-		get { EanAddOnSymbol(rawValue: sEnum(ZXing_ReaderOptions_getEanAddOnSymbol(_handle)))! }
-		set { ZXing_ReaderOptions_setEanAddOnSymbol(_handle, cEnum(newValue.rawValue)) }
-	}
-
-	/// Validate optional checksums (e.g., Code39, ITF).
-	public var validateOptionalChecksum: Bool {
-		get { ZXing_ReaderOptions_getValidateOptionalChecksum(_handle) }
-		set { ZXing_ReaderOptions_setValidateOptionalChecksum(_handle, newValue) }
+		self.formats = formats ?? []
+		self.tryHarder = tryHarder ?? Self.cDefaults.tryHarder
+		self.tryRotate = tryRotate ?? Self.cDefaults.tryRotate
+		self.tryInvert = tryInvert ?? Self.cDefaults.tryInvert
+		self.tryDownscale = tryDownscale ?? Self.cDefaults.tryDownscale
+		self.isPure = isPure ?? Self.cDefaults.isPure
+		self.returnErrors = returnErrors ?? Self.cDefaults.returnErrors
+		self.binarizer = binarizer ?? Self.cDefaults.binarizer
+		self.textMode = textMode ?? Self.cDefaults.textMode
+		self.minLineCount = minLineCount ?? Self.cDefaults.minLineCount
+		self.maxNumberOfSymbols = maxNumberOfSymbols ?? Self.cDefaults.maxNumberOfSymbols
+		self.eanAddOnSymbol = eanAddOnSymbol ?? Self.cDefaults.eanAddOnSymbol
+		self.validateOptionalChecksum = validateOptionalChecksum ?? Self.cDefaults.validateOptionalChecksum
 	}
 
 	/// Reads barcodes from an image view using this reader's options.
 	public func read(from image: ImageView) throws -> [Barcode] {
-		guard let barcodes = ZXing_ReadBarcodes(image._handle, _handle) else { return [] }
-		defer { ZXing_Barcodes_delete(barcodes) }
+		try withCReaderOptions(self) { optionsHandle in
+			guard let barcodes = ZXing_ReadBarcodes(image._handle, optionsHandle) else { throw lastError() }
+			defer { ZXing_Barcodes_delete(barcodes) }
 
-		let size = ZXing_Barcodes_size(barcodes)
-		guard size > 0 else { return [] }
+			let size = ZXing_Barcodes_size(barcodes)
+			guard size > 0 else { return [] }
 
-		return (0..<Int32(size)).map { i in
-			Barcode(ZXing_Barcodes_move(barcodes, i)!)
+			var result: [Barcode] = []
+			result.reserveCapacity(Int(size))
+			for i in 0..<Int32(size) {
+				guard let handle = ZXing_Barcodes_move(barcodes, i) else {
+					throw ZXingError("Failed to move barcode at index \(i)")
+				}
+				result.append(try Barcode(handle))
+			}
+			return result
 		}
 	}
+}
+
+private func withCReaderOptions<T>(_ options: BarcodeReader, _ body: (OpaquePointer) throws -> T) throws -> T {
+	guard let handle = ZXing_ReaderOptions_new() else { throw lastError() }
+	defer { ZXing_ReaderOptions_delete(handle) }
+
+	if !options.formats.isEmpty {
+		try options.formats.withCFormats { ptr, count in
+			ZXing_ReaderOptions_setFormats(handle, ptr, count)
+		}
+	}
+	ZXing_ReaderOptions_setTryHarder(handle, options.tryHarder)
+	ZXing_ReaderOptions_setTryRotate(handle, options.tryRotate)
+	ZXing_ReaderOptions_setTryInvert(handle, options.tryInvert)
+	ZXing_ReaderOptions_setTryDownscale(handle, options.tryDownscale)
+	ZXing_ReaderOptions_setIsPure(handle, options.isPure)
+	ZXing_ReaderOptions_setReturnErrors(handle, options.returnErrors)
+	ZXing_ReaderOptions_setBinarizer(handle, try checkedCEnum(options.binarizer.rawValue))
+	ZXing_ReaderOptions_setTextMode(handle, try checkedCEnum(options.textMode.rawValue))
+	ZXing_ReaderOptions_setMinLineCount(handle, Int32(options.minLineCount))
+	ZXing_ReaderOptions_setMaxNumberOfSymbols(handle, Int32(options.maxNumberOfSymbols))
+	ZXing_ReaderOptions_setEanAddOnSymbol(handle, try checkedCEnum(options.eanAddOnSymbol.rawValue))
+	ZXing_ReaderOptions_setValidateOptionalChecksum(handle, options.validateOptionalChecksum)
+
+	return try body(handle)
 }
