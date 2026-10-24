@@ -13,8 +13,10 @@
 #include "ODDataBarCommon.h"
 #include "ODDataBarExpandedBitDecoder.h"
 #include "BarcodeData.h"
+#include "ReaderOptions.h"
 #include "ZXTestSupport.h"
 
+#include <algorithm>
 #include <cmath>
 #include <map>
 #include <vector>
@@ -256,7 +258,7 @@ static bool Insert(PairMap& all, Pairs&& row)
 }
 
 template <typename ITER>
-static bool FindValidSequence(const PairMap& all, ITER begin, ITER end, Pairs& stack)
+static bool FindValidSequence(const PairMap& all, ITER begin, ITER end, Pairs& stack, int minCount)
 {
 	if (begin == end)
 		return ChecksumIsValid(stack);
@@ -274,10 +276,10 @@ static bool FindValidSequence(const PairMap& all, ITER begin, ITER end, Pairs& s
 				continue;
 			// Require repeated observations to lower the chance of a misread.
 			// RemovePairs can leave counts out of order, so do not stop at a low count.
-			if (p->count < 2)
+			if (p->count < minCount)
 				continue;
 			stack.push_back(*p);
-			if (FindValidSequence(all, std::next(begin), end, stack))
+			if (FindValidSequence(all, std::next(begin), end, stack, minCount))
 				return true;
 			stack.pop_back();
 		}
@@ -287,7 +289,7 @@ static bool FindValidSequence(const PairMap& all, ITER begin, ITER end, Pairs& s
 }
 
 ZXING_EXPORT_TEST_ONLY
-Pairs FindValidSequence(PairMap& all)
+Pairs FindValidSequence(PairMap& all, int minCount)
 {
 	Pairs stack;
 	for (const auto& first : all[FINDER_A]) {
@@ -298,7 +300,7 @@ Pairs FindValidSequence(PairMap& all)
 		auto& sequence = FINDER_PATTERN_SEQUENCES[sequenceIndex];
 		stack.push_back(first);
 		// recursively fill the stack with pairs according to the valid finder sequence
-		if (FindValidSequence(all, std::next(std::begin(sequence)), std::end(sequence), stack))
+		if (FindValidSequence(all, std::next(std::begin(sequence)), std::end(sequence), stack, minCount))
 			break;
 		stack.pop_back();
 	}
@@ -361,7 +363,8 @@ BarcodeData DataBarExpandedReader::decodePattern(int rowNumber, PatternView& vie
 	if (!Insert(allPairs, ReadRowOfPairs<true>(view, rowNumber)))
 		return {};
 
-	auto pairs = FindValidSequence(allPairs);
+	// each pair (but the first) must be seen on 2 lines, or on 1 if pure or minLineCount(1) was requested
+	auto pairs = FindValidSequence(allPairs, _opts.isPure() ? 1 : std::min(2, int(_opts.minLineCount())));
 	if (pairs.empty())
 		return {};
 #endif
