@@ -13,6 +13,7 @@
 #include "ODDataBarCommon.h"
 #include "ODDataBarExpandedBitDecoder.h"
 #include "BarcodeData.h"
+#include "ZXTestSupport.h"
 
 #include <cmath>
 #include <map>
@@ -271,8 +272,10 @@ static bool FindValidSequence(const PairMap& all, ITER begin, ITER end, Pairs& s
 			// skip p if it is a half-pair but not the last one in the sequence
 			if (!p->right && std::next(begin) != end)
 				continue;
-			// to lower the chance of a misread, one can require each pair to have been seen at least N times.
-			// e.g: if (p.count < 2) break;
+			// Require repeated observations to lower the chance of a misread.
+			// RemovePairs can leave counts out of order, so do not stop at a low count.
+			if (p->count < 2)
+				continue;
 			stack.push_back(*p);
 			if (FindValidSequence(all, std::next(begin), end, stack))
 				return true;
@@ -283,7 +286,8 @@ static bool FindValidSequence(const PairMap& all, ITER begin, ITER end, Pairs& s
 	return false;
 }
 
-static Pairs FindValidSequence(PairMap& all)
+ZXING_EXPORT_TEST_ONLY
+Pairs FindValidSequence(PairMap& all)
 {
 	Pairs stack;
 	for (const auto& first : all[FINDER_A]) {
@@ -301,7 +305,8 @@ static Pairs FindValidSequence(PairMap& all)
 	return stack;
 }
 
-static void RemovePairs(PairMap& all, const Pairs& pairs)
+ZXING_EXPORT_TEST_ONLY
+void RemovePairs(PairMap& all, const Pairs& pairs)
 {
 	for(const auto& p : pairs)
 		if (auto i = Find(all[p.finder], p); i != all[p.finder].end())
